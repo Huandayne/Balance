@@ -36,9 +36,8 @@ public partial class App : Application
             DisableAvaloniaDataAnnotationValidation();
             
             // Register Services (Simple IoC for now)
-            var sensorService = new Services.Sensor.SerialSensorService();
+            var sensorService = new Services.Sensor.DualSensorService();
             var sessionService = new Services.TestSessionService();
-            // var sensorService = new Services.Sensor.NetworkSensorService(); // Switch if needed
 
             desktop.MainWindow = new MainWindow
             {

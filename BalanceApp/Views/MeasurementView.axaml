@@ -4,13 +4,14 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:vm="using:BalanceApp.ViewModels"
              xmlns:sp="clr-namespace:ScottPlot.Avalonia;assembly=ScottPlot.Avalonia"
-             mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
+             xmlns:icons="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+             mc:Ignorable="d" d:DesignWidth="900" d:DesignHeight="500"
              x:Class="BalanceApp.Views.MeasurementView"
              x:DataType="vm:MeasurementViewModel">
   
   <Grid Classes="Page" RowDefinitions="Auto, *">
       
-      <!-- Control Bar (Patient + Actions + Status) -->
+      <!-- Control Bar (Patient + Actions + Multi-channel Connection) -->
       <Border Grid.Row="0" Classes="Card" Margin="0,0,0,12" Padding="12">
           <Grid ColumnDefinitions="Auto, *, Auto">
               <!-- Left: Patient Info -->
@@ -24,7 +25,7 @@
                   <!-- Separator -->
                   <Border Width="1" Height="24" Background="#E0E0E0" Margin="8,0"/>
 
-                  <!-- Actions (Moved here) -->
+                  <!-- Actions -->
                   <StackPanel Orientation="Horizontal" Spacing="8">
                        <Button Command="{Binding StartStopMeasurementCommand}" 
                                Content="{Binding ActionButtonText}"
@@ -45,7 +46,7 @@
                                </Style>
                                <!-- Checked State -->
                                <Style Selector="ToggleButton:checked">
-                                    <Setter Property="Background" Value="{StaticResource AccentBrush}"/> <!-- User wanted a switch/active look -->
+                                    <Setter Property="Background" Value="{StaticResource AccentBrush}"/>
                                     <Setter Property="Foreground" Value="white"/>
                                     <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}"/> 
                                     <Setter Property="FontWeight" Value="SemiBold"/>
@@ -59,15 +60,23 @@
                   </StackPanel>
               </StackPanel>
 
-              <!-- Right: Device Status -->
-              <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
-                   <StackPanel Spacing="2" HorizontalAlignment="Right">
-                       <TextBlock Text="Thiết Bị" Classes="SectionHeader" Margin="0" FontSize="12" HorizontalAlignment="Right"/>
-                       <StackPanel Orientation="Horizontal" Spacing="6">
-                           <TextBlock Text="{Binding ConnectionStatus}" Foreground="#4CAF50" FontWeight="Medium" FontSize="14"/>
-                           <!-- Indicator -->
-                           <Border Width="10" Height="10" CornerRadius="5" Margin="0,5,0,0"
-                                   Classes.connected="{Binding IsConnected}">
+              <!-- Right: Device Connection Controls & Status -->
+              <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                   <!-- Mode Selector -->
+                   <StackPanel Spacing="2">
+                       <TextBlock Text="Kênh Kết Nối" Classes="SectionHeader" Margin="0" FontSize="11" HorizontalAlignment="Left"/>
+                       <ComboBox SelectedIndex="{Binding SelectedModeIndex}" Height="32" Padding="8,4" FontSize="12">
+                           <ComboBoxItem Content="📶 WiFi" />
+                           <ComboBoxItem Content="🔵 Bluetooth" />
+                           <ComboBoxItem Content="⚡ Cả hai" />
+                       </ComboBox>
+                   </StackPanel>
+
+                   <!-- Status Badges -->
+                   <StackPanel Spacing="3" VerticalAlignment="Center" Margin="4,0">
+                       <!-- WiFi Status Indicator -->
+                       <StackPanel Orientation="Horizontal" Spacing="6" IsVisible="{Binding IsWifiModeActive}">
+                           <Border Width="8" Height="8" CornerRadius="4" Classes.connected="{Binding IsWifiConnected}">
                                <Border.Styles>
                                    <Style Selector="Border">
                                        <Setter Property="Background" Value="#F44336"/> 
@@ -77,12 +86,92 @@
                                    </Style>
                                </Border.Styles>
                            </Border>
+                           <TextBlock Text="WiFi:" FontSize="11" FontWeight="SemiBold" Foreground="#666"/>
+                           <TextBlock Text="{Binding WifiStatus}" FontSize="11" Foreground="#444" MaxWidth="130" TextTrimming="CharacterEllipsis"/>
+                       </StackPanel>
+
+                       <!-- Bluetooth Status Indicator -->
+                       <StackPanel Orientation="Horizontal" Spacing="6" IsVisible="{Binding IsBluetoothModeActive}">
+                           <Border Width="8" Height="8" CornerRadius="4" Classes.connected="{Binding IsBluetoothConnected}">
+                               <Border.Styles>
+                                   <Style Selector="Border">
+                                       <Setter Property="Background" Value="#F44336"/> 
+                                   </Style>
+                                   <Style Selector="Border.connected">
+                                       <Setter Property="Background" Value="#4CAF50"/>
+                                   </Style>
+                               </Border.Styles>
+                           </Border>
+                           <TextBlock Text="BT:" FontSize="11" FontWeight="SemiBold" Foreground="#666"/>
+                           <TextBlock Text="{Binding BluetoothStatus}" FontSize="11" Foreground="#444" MaxWidth="130" TextTrimming="CharacterEllipsis"/>
                        </StackPanel>
                    </StackPanel>
-                   
-                   <Button Command="{Binding ScanDevicesCommand}"
-                           Content="Kết nối" FontSize="11" Padding="8,4" 
-                           IsVisible="{Binding !IsConnected}" Classes="Accent" VerticalAlignment="Center"/>
+
+                   <!-- Quick Connect / Disconnect Action Button -->
+                   <Button Command="{Binding ToggleConnectionCommand}"
+                           Content="{Binding ConnectionButtonText}"
+                           Classes="Accent"
+                           Padding="14,6"
+                           VerticalAlignment="Center"/>
+
+                   <!-- Settings Popover Button (Host/Port and COM selection) -->
+                   <Button Padding="8,6" VerticalAlignment="Center" ToolTip.Tip="Cài đặt kết nối WiFi &amp; Bluetooth">
+                       <icons:MaterialIcon Kind="Cog" Width="16" Height="16" Foreground="#555"/>
+                       <Button.Flyout>
+                           <Flyout Placement="BottomEdgeAlignedRight">
+                               <Border Padding="10" Width="300">
+                                   <StackPanel Spacing="12">
+                                       <TextBlock Text="Cấu Hình Kết Nối Thiết Bị" FontWeight="SemiBold" FontSize="14" Foreground="{StaticResource AccentBrush}"/>
+                                       
+                                       <!-- WiFi Section -->
+                                       <Border BorderBrush="#E5E5E5" BorderThickness="1" CornerRadius="6" Padding="10" Background="#FAFAFA"
+                                               IsVisible="{Binding IsWifiModeActive}">
+                                           <StackPanel Spacing="8">
+                                               <TextBlock Text="📶 Cấu Hình WiFi" FontWeight="Medium" FontSize="12"/>
+                                               <Grid ColumnDefinitions="*, Auto" Margin="0,2">
+                                                   <TextBox Text="{Binding WifiHost}" Watermark="esp32-balance.local" FontSize="12" Margin="0,0,6,0"/>
+                                                   <TextBox Grid.Column="1" Text="{Binding WifiPort}" Watermark="Port" Width="60" FontSize="12"/>
+                                               </Grid>
+                                               <Button Command="{Binding ToggleWifiConnectionCommand}"
+                                                       Content="{Binding WifiButtonText}"
+                                                       HorizontalAlignment="Stretch"
+                                                       HorizontalContentAlignment="Center"
+                                                       FontSize="11" Padding="6"/>
+                                           </StackPanel>
+                                       </Border>
+
+                                       <!-- Bluetooth Section -->
+                                       <Border BorderBrush="#E5E5E5" BorderThickness="1" CornerRadius="6" Padding="10" Background="#FAFAFA"
+                                               IsVisible="{Binding IsBluetoothModeActive}">
+                                           <StackPanel Spacing="8">
+                                               <TextBlock Text="🔵 Cấu Hình Bluetooth" FontWeight="Medium" FontSize="12"/>
+                                               <Grid ColumnDefinitions="*, Auto" Margin="0,2">
+                                                   <ComboBox ItemsSource="{Binding AvailablePorts}" SelectedItem="{Binding SelectedPort}"
+                                                             HorizontalAlignment="Stretch" FontSize="12" Margin="0,0,6,0"/>
+                                                   <Button Grid.Column="1" Command="{Binding RefreshPortsCommand}" Padding="6" ToolTip.Tip="Làm mới cổng COM">
+                                                       <icons:MaterialIcon Kind="Refresh" Width="14" Height="14"/>
+                                                   </Button>
+                                               </Grid>
+                                               <Button Command="{Binding ToggleBluetoothConnectionCommand}"
+                                                       Content="{Binding BluetoothButtonText}"
+                                                       HorizontalAlignment="Stretch"
+                                                       HorizontalContentAlignment="Center"
+                                                       FontSize="11" Padding="6"/>
+                                           </StackPanel>
+                                       </Border>
+
+                                       <!-- Auto Scan Button -->
+                                       <Button Command="{Binding ScanDevicesCommand}"
+                                               Content="🔍 Tự Động Quét &amp; Kết Nối"
+                                               HorizontalAlignment="Stretch"
+                                               HorizontalContentAlignment="Center"
+                                               Classes="Accent"
+                                               FontSize="12" Padding="8,6"/>
+                                   </StackPanel>
+                               </Border>
+                           </Flyout>
+                       </Button.Flyout>
+                   </Button>
               </StackPanel>
           </Grid>
       </Border>

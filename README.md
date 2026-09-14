@@ -14,7 +14,10 @@ Hệ thống được chia thành 2 phần chính:
   - Đọc tín hiệu lực từ 4 góc (F1, F2, F3, F4) thông qua thư viện `HX711.h`.
   - Tính toán tổng lực (sum) và tọa độ tâm áp lực (X, Y).
   - Đóng gói dữ liệu thành một chuỗi JSON.
-  - Liên tục gửi chuỗi JSON này (ở tần số ~5Hz/200ms) qua cổng **Serial (COM kết nối USB)** và **Bluetooth Serial** (`BT_DEVICE_NAME = "ESP32_Can_Bang"`).
+  - Liên tục gửi chuỗi JSON này (ở tần số ~5Hz/200ms) đồng thời qua:
+    - Cổng **Serial (USB)**: 115200 baud.
+    - **Bluetooth Serial**: Tên thiết bị `ESP32_Can_Bang`.
+    - **WiFi (Chế độ STA - kết nối router)**: Mở TCP Server cổng `8888`, hỗ trợ mDNS với tên `esp32-balance.local`.
   - Có tích hợp Watchdog (`esp_task_wdt`) để tự động khởi động lại nếu bị treo.
 
 ### Hai. Phần mềm Desktop (App) - Nằm trong thư mục `BalanceApp/`
@@ -23,7 +26,7 @@ Hệ thống được chia thành 2 phần chính:
 - **Thư viện vẽ đồ thị**: `ScottPlot` (vẽ biểu đồ tâm áp lực COP theo thời gian thực).
 - **Database**: SQLite qua `Microsoft.EntityFrameworkCore` (EF Core).
 - **Hoạt động**:
-  - **Kết nối**: `SerialSensorService.cs` đảm nhiệm việc tự động quét cổng COM (hoặc kết nối Bluetooth COM ảo) và bắt dải dữ liệu JSON gửi lên từ ESP32.
+  - **Kết nối đa kênh**: `DualSensorService.cs` quản lý linh hoạt giữa `WifiSensorService.cs` (kết nối TCP Socket qua WiFi) và `SerialSensorService.cs` (kết nối Bluetooth / COM Port). Hỗ trợ chọn chế độ **WiFi**, **Bluetooth**, hoặc **chạy đồng thời cả 2 kênh (Dual-link)** kèm cơ chế khử trùng lặp dữ liệu theo timestamp.
   - **Xử lý luồng dữ liệu (Real-time)**: Dữ liệu bay vào được đẩy lên `MeasurementViewModel.cs`, từ đó kích hoạt view (`MeasurementView.axaml.cs`) thông qua `UpdateGraphAction` để vẽ quỹ đạo điểm COP dời đổi trên biểu đồ ScottPlot dạng Scatter.
   - **Lưu trữ**: Khi bấm "BẮT ĐẦU ĐO", app bắt đầu đệm dữ liệu vào RAM. Khi bấm "DỪNG ĐO", app dùng `TestSessionService.cs` gom các mẫu đo lại và chèn vào Database (vào bảng `TestSessions` và `TestSamples`).
 

@@ -19,17 +19,63 @@ public partial class MeasurementViewModel : ViewModelBase
     private readonly MainViewModel _mainViewModel;
     private ISensorService _sensorService => _mainViewModel.SensorService;
 
+    private DualSensorService? DualService => _sensorService as DualSensorService;
+
     [ObservableProperty]
     private string _title = "Đo Thăng Bằng";
 
     [ObservableProperty]
     private string _connectionStatus = "Chưa kết nối";
 
+    // 0: WiFi, 1: Bluetooth, 2: Cả hai
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsWifiModeActive))]
+    [NotifyPropertyChangedFor(nameof(IsBluetoothModeActive))]
+    private int _selectedModeIndex = 0; // Mặc định là WiFi
+
+    public bool IsWifiModeActive => SelectedModeIndex == 0 || SelectedModeIndex == 2;
+    public bool IsBluetoothModeActive => SelectedModeIndex == 1 || SelectedModeIndex == 2;
+
+    partial void OnSelectedModeIndexChanged(int value)
+    {
+        if (DualService != null)
+        {
+            DualService.Mode = value switch
+            {
+                0 => ConnectionChannelMode.Wifi,
+                1 => ConnectionChannelMode.Bluetooth,
+                2 => ConnectionChannelMode.Both,
+                _ => ConnectionChannelMode.Wifi
+            };
+        }
+        UpdateConnectionFlags();
+    }
+
+    // WiFi settings & status
+    [ObservableProperty]
+    private string _wifiHost = "esp32-balance.local";
+
+    [ObservableProperty]
+    private int _wifiPort = 8888;
+
+    [ObservableProperty]
+    private bool _isWifiConnected;
+
+    [ObservableProperty]
+    private string _wifiStatus = "Chưa kết nối";
+
+    // Bluetooth settings & status
     [ObservableProperty]
     private ObservableCollection<string> _availablePorts = new();
 
     [ObservableProperty]
     private string? _selectedPort;
+
+    [ObservableProperty]
+    private bool _isBluetoothConnected;
+
+    [ObservableProperty]
+    private string _bluetoothStatus = "Chưa kết nối";
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ConnectionButtonText))]
@@ -39,6 +85,8 @@ public partial class MeasurementViewModel : ViewModelBase
     private bool _isMeasuring;
 
     public string ConnectionButtonText => IsConnected ? "Ngắt Kết Nối" : "Kết Nối";
+    public string WifiButtonText => IsWifiConnected ? "Ngắt WiFi" : "Nối WiFi";
+    public string BluetoothButtonText => IsBluetoothConnected ? "Ngắt BT" : "Nối BT";
     
     [ObservableProperty]
     private string _actionButtonText = "BẮT ĐẦU ĐO";
@@ -65,16 +113,35 @@ public partial class MeasurementViewModel : ViewModelBase
         Task.Run(async () => await ScanDevices());
     }
 
+    private void UpdateConnectionFlags()
+    {
+        if (DualService != null)
+        {
+            IsWifiConnected = DualService.IsWifiConnected;
+            IsBluetoothConnected = DualService.IsBluetoothConnected;
+            WifiStatus = DualService.WifiStatus;
+            BluetoothStatus = DualService.BluetoothStatus;
+            IsConnected = DualService.IsConnected;
+        }
+        else
+        {
+            IsConnected = _sensorService.IsConnected;
+        }
+        OnPropertyChanged(nameof(WifiButtonText));
+        OnPropertyChanged(nameof(BluetoothButtonText));
+    }
+
     private void OnStatusChanged(string status)
     {
         ConnectionStatus = status;
-        IsConnected = _sensorService.IsConnected;
+        UpdateConnectionFlags();
     }
 
     [RelayCommand]
     private async Task ScanDevices()
     {
         await _sensorService.ScanAndConnectAsync();
+        UpdateConnectionFlags();
     }
 
     [RelayCommand]
@@ -87,9 +154,61 @@ public partial class MeasurementViewModel : ViewModelBase
     }
 
     [RelayCommand]
+    private void ToggleWifiConnection()
+    {
+        if (DualService != null)
+        {
+            if (DualService.IsWifiConnected)
+            {
+                DualService.DisconnectWifi();
+            }
+            else
+            {
+                DualService.ConnectWifi(WifiHost, WifiPort);
+            }
+        }
+        else if (IsConnected)
+        {
+            _sensorService.Disconnect();
+        }
+        else
+        {
+            _sensorService.Connect($"{WifiHost}:{WifiPort}");
+        }
+        UpdateConnectionFlags();
+    }
+
+    [RelayCommand]
+    private void ToggleBluetoothConnection()
+    {
+        if (string.IsNullOrEmpty(SelectedPort)) return;
+
+        if (DualService != null)
+        {
+            if (DualService.IsBluetoothConnected)
+            {
+                DualService.DisconnectBluetooth();
+            }
+            else
+            {
+                DualService.ConnectBluetooth(SelectedPort);
+            }
+        }
+        else if (IsConnected)
+        {
+            _sensorService.Disconnect();
+        }
+        else
+        {
+            _sensorService.Connect(SelectedPort);
+        }
+        UpdateConnectionFlags();
+    }
+
+    [RelayCommand]
     private void ToggleConnection()
     {
-        if (_sensorService.IsConnected)
+        if (IsConnected)
         {
             _sensorService.Disconnect();
             ConnectionStatus = "Đã ngắt kết nối";
@@ -97,9 +216,26 @@ public partial class MeasurementViewModel : ViewModelBase
         }
         else
         {
-            if (string.IsNullOrEmpty(SelectedPort)) return;
-            _sensorService.Connect(SelectedPort);
+            if (DualService != null)
+            {
+                if (IsWifiModeActive)
+                {
+                    DualService.ConnectWifi(WifiHost, WifiPort);
+                }
+                if (IsBluetoothModeActive && !string.IsNullOrEmpty(SelectedPort))
+                {
+                    DualService.ConnectBluetooth(SelectedPort);
+                }
+            }
+            else
+            {
+                if (IsWifiModeActive)
+                    _sensorService.Connect($"{WifiHost}:{WifiPort}");
+                else if (!string.IsNullOrEmpty(SelectedPort))
+                    _sensorService.Connect(SelectedPort);
+            }
         }
+        UpdateConnectionFlags();
     }
     
     // Simulation Logic
