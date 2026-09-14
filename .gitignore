@@ -1,1 +1,10 @@
 /References
+.vs/
+[Bb]in/
+[Oo]bj/
+*.user
+*.suo
+.vscode
+*.cache
+*.editorconfig
+*.sln
